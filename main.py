@@ -6,7 +6,7 @@ app = FastAPI(title="EcoVision API")
 
 # -------- HABILITAR CORS --------
 origins = [
-    "https://bonincompras.github.io/recyctech-front/",  # seu front-end
+    "https://bonincompras.github.io",  # seu front-end
     # "*"  # para testes, pode usar "*" mas não recomendado em produção
 ]
 
@@ -40,4 +40,5 @@ def calcular_numero(dados: NumeroRequest):
 @app.get("/")
 def health_check():
     return {"status": "API rodando 🚀"}
+
 
