@@ -5,3 +5,5 @@ opencv-python-headless
 ultralytics
 requests
 python-multipart==0.0.6
+supabase
+python-multipart
