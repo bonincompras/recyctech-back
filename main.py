@@ -30,7 +30,7 @@ class NumeroResponse(BaseModel):
 @app.post("/calcular", response_model=NumeroResponse)
 def calcular_numero(dados: NumeroRequest):
     numero = dados.numero
-    resultado = numero + 5 if numero % 2 == 0 else numero + 6
+    resultado = numero + 5 if numero % 2 == 0 else (numero + 5) *-1
     return {
         "original": numero,
         "resultado": resultado
@@ -40,5 +40,6 @@ def calcular_numero(dados: NumeroRequest):
 @app.get("/")
 def health_check():
     return {"status": "API rodando 🚀"}
+
 
 
