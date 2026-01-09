@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse
 import cv2
 import numpy as np
 from ultralytics import YOLO
+import os
+import requests
 
 app = FastAPI(title="EcoVision API")
 
@@ -20,10 +22,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------- Carregar modelo YOLO ----------
-# Pode usar yolov8n.pt (nano) para testes
-model = YOLO("yolov8n.pt")  
+# ---------- Garantir que o modelo YOLO exista ----------
+MODEL_PATH = "yolov8n.pt"
+if not os.path.exists(MODEL_PATH):
+    print("Modelo YOLO não encontrado, baixando...")
+    url = "https://ultralytics.com/assets/yolov8n.pt"
+    r = requests.get(url, allow_redirects=True)
+    open(MODEL_PATH, "wb").write(r.content)
+    print("Download concluído!")
 
+# ---------- Carregar modelo YOLO ----------
+model = YOLO(MODEL_PATH)
+
+# ---------- Endpoints ----------
 @app.post("/analisar")
 async def analisar_imagem(file: UploadFile = File(...)):
     # Ler imagem
