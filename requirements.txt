@@ -4,3 +4,4 @@ numpy
 opencv-python-headless
 ultralytics
 requests
+python-multipart==0.0.6
