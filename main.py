@@ -1,15 +1,29 @@
+# =========================
+# Otimizações para CPU (Render)
+# =========================
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+
+# =========================
+# Imports
+# =========================
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import cv2
 import numpy as np
 from ultralytics import YOLO
-import os
 import requests
 
+# =========================
+# App
+# =========================
 app = FastAPI(title="EcoVision API")
 
-# ---------- CORS ----------
+# =========================
+# CORS
+# =========================
 origins = [
     "https://bonincompras.github.io",
 ]
@@ -22,46 +36,87 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------- Garantir que o modelo YOLO exista ----------
+# =========================
+# Modelo YOLO
+# =========================
 MODEL_PATH = "yolov8n.pt"
+
 if not os.path.exists(MODEL_PATH):
-    print("Modelo YOLO não encontrado, baixando...")
+    print("📥 Modelo YOLO não encontrado. Baixando...")
     url = "https://ultralytics.com/assets/yolov8n.pt"
-    r = requests.get(url, allow_redirects=True)
-    open(MODEL_PATH, "wb").write(r.content)
-    print("Download concluído!")
+    r = requests.get(url, timeout=60)
+    with open(MODEL_PATH, "wb") as f:
+        f.write(r.content)
+    print("✅ Download concluído!")
 
-# ---------- Carregar modelo YOLO ----------
+print("🚀 Carregando modelo YOLO...")
 model = YOLO(MODEL_PATH)
+model.fuse()  # acelera inferência
+print("✅ Modelo carregado!")
 
-# ---------- Endpoints ----------
+# =========================
+# Funções utilitárias
+# =========================
+def resize_imagem(img, max_size=512):
+    h, w = img.shape[:2]
+    if max(h, w) <= max_size:
+        return img
+    scale = max_size / max(h, w)
+    return cv2.resize(img, (int(w * scale), int(h * scale)))
+
+# =========================
+# Endpoints
+# =========================
 @app.post("/analisar")
 async def analisar_imagem(file: UploadFile = File(...)):
-    # Ler imagem
-    contents = await file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    altura, largura, _ = img.shape
+    try:
+        # Ler imagem
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    # Rodar detecção
-    results = model.predict(img)
-    
-    objetos = []
-    for r in results[0].boxes:
-        x_min, y_min, x_max, y_max = r.xyxy[0].tolist()
-        confianca = float(r.conf[0])
-        categoria = model.names[int(r.cls[0])]
-        objetos.append({
-            "categoria": categoria,
-            "confianca": round(confianca * 100, 1),
-            "bbox": [x_min, y_min, x_max, y_max]
-        })
-    
-    return JSONResponse({
-        "objetos": objetos,
-        "largura_imagem": largura,
-        "altura_imagem": altura
-    })
+        if img is None:
+            return JSONResponse(
+                {"erro": "Imagem inválida"},
+                status_code=400
+            )
+
+        altura, largura, _ = img.shape
+
+        # Reduz imagem (CRÍTICO para performance)
+        img = resize_imagem(img, max_size=512)
+
+        # YOLO otimizado para CPU
+        results = model.predict(
+            source=img,
+            imgsz=416,
+            conf=0.45,
+            iou=0.5,
+            device="cpu",
+            half=False,
+            stream=False,
+            verbose=False
+        )
+
+        objetos = []
+        for r in results[0].boxes:
+            objetos.append({
+                "categoria": model.names[int(r.cls[0])],
+                "confianca": round(float(r.conf[0]) * 100, 1),
+                "bbox": [round(v, 1) for v in r.xyxy[0].tolist()]
+            })
+
+        return {
+            "objetos": objetos,
+            "largura_imagem": largura,
+            "altura_imagem": altura
+        }
+
+    except Exception as e:
+        return JSONResponse(
+            {"erro": str(e)},
+            status_code=500
+        )
 
 @app.get("/")
 def health_check():
