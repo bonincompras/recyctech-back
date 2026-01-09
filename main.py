@@ -8,13 +8,14 @@ os.environ["MKL_NUM_THREADS"] = "1"
 # =========================
 # Imports
 # =========================
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import cv2
 import numpy as np
 from ultralytics import YOLO
 import requests
+from supabase import create_client, Client
 
 # =========================
 # App
@@ -35,6 +36,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# =========================
+# Supabase
+# =========================
+SUPABASE_URL = os.environ.get("SUPABASE_URL")  # colocar sua URL do Supabase
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")  # colocar sua chave do Supabase
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Diretório para salvar imagens temporariamente (opcional)
+IMAGES_DIR = "feedback_images"
+os.makedirs(IMAGES_DIR, exist_ok=True)
 
 # =========================
 # Modelo YOLO
@@ -67,26 +79,21 @@ def resize_imagem(img, max_size=512):
 # =========================
 # Endpoints
 # =========================
+
+# --- Analisar imagem ---
 @app.post("/analisar")
 async def analisar_imagem(file: UploadFile = File(...)):
     try:
-        # Ler imagem
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if img is None:
-            return JSONResponse(
-                {"erro": "Imagem inválida"},
-                status_code=400
-            )
+            return JSONResponse({"erro": "Imagem inválida"}, status_code=400)
 
         altura, largura, _ = img.shape
-
-        # Reduz imagem (CRÍTICO para performance)
         img = resize_imagem(img, max_size=512)
 
-        # YOLO otimizado para CPU
         results = model.predict(
             source=img,
             imgsz=416,
@@ -113,11 +120,32 @@ async def analisar_imagem(file: UploadFile = File(...)):
         }
 
     except Exception as e:
-        return JSONResponse(
-            {"erro": str(e)},
-            status_code=500
-        )
+        return JSONResponse({"erro": str(e)}, status_code=500)
 
+# --- Salvar feedback ---
+@app.post("/feedback")
+async def salvar_feedback(
+    file: UploadFile = File(...),
+    feedback: str = Form(...)
+):
+    try:
+        # Salvar imagem temporariamente (opcional)
+        caminho_imagem = os.path.join(IMAGES_DIR, file.filename)
+        with open(caminho_imagem, "wb") as f:
+            f.write(await file.read())
+
+        # Salvar dados no Supabase
+        supabase.table("feedbacks").insert({
+            "nome_imagem": file.filename,
+            "feedback": feedback
+        }).execute()
+
+        return JSONResponse({"status": "salvo", "imagem": file.filename})
+
+    except Exception as e:
+        return JSONResponse({"erro": str(e)}, status_code=500)
+
+# --- Health check ---
 @app.get("/")
 def health_check():
     return {"status": "API rodando 🚀"}
