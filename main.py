@@ -40,13 +40,12 @@ app.add_middleware(
 # =========================
 # Supabase
 # =========================
-SUPABASE_URL = os.environ.get("SUPABASE_URL")  # colocar sua URL do Supabase
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")  # colocar sua chave do Supabase
+SUPABASE_URL = os.environ.get("SUPABASE_URL")  # URL do seu projeto Supabase
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")  # Chave service_role
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Diretório para salvar imagens temporariamente (opcional)
-IMAGES_DIR = "feedback_images"
-os.makedirs(IMAGES_DIR, exist_ok=True)
+# Nome do bucket onde as imagens serão salvas
+BUCKET_NAME = "feedback-images"
 
 # =========================
 # Modelo YOLO
@@ -122,25 +121,44 @@ async def analisar_imagem(file: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse({"erro": str(e)}, status_code=500)
 
-# --- Salvar feedback ---
+# --- Salvar feedback + imagem no Supabase Storage ---
 @app.post("/feedback")
 async def salvar_feedback(
     file: UploadFile = File(...),
     feedback: str = Form(...)
 ):
     try:
-        # Salvar imagem temporariamente (opcional)
-        caminho_imagem = os.path.join(IMAGES_DIR, file.filename)
-        with open(caminho_imagem, "wb") as f:
-            f.write(await file.read())
+        # Lê bytes da imagem
+        img_bytes = await file.read()
 
-        # Salvar dados no Supabase
+        # Salvar imagem no Supabase Storage
+        storage_response = supabase.storage.from_(BUCKET_NAME).upload(
+            file.filename,
+            img_bytes,
+            {"content-type": file.content_type}
+        )
+
+        if storage_response.get("error"):
+            return JSONResponse(
+                {"erro": f"Erro ao salvar imagem: {storage_response['error']['message']}"},
+                status_code=500
+            )
+
+        # Gerar link público da imagem
+        url_response = supabase.storage.from_(BUCKET_NAME).get_public_url(file.filename)
+        image_url = url_response.get("publicUrl")
+
+        # Salvar feedback + link da imagem no banco Supabase
         supabase.table("feedbacks").insert({
             "nome_imagem": file.filename,
             "feedback": feedback
         }).execute()
 
-        return JSONResponse({"status": "salvo", "imagem": file.filename})
+        return JSONResponse({
+            "status": "salvo",
+            "imagem_url": image_url,
+            "feedback": feedback
+        })
 
     except Exception as e:
         return JSONResponse({"erro": str(e)}, status_code=500)
