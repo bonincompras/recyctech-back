@@ -5,6 +5,8 @@ from model_utils import process_objects  # Certifique-se de que esta função es
 import cv2
 import numpy as np
 
+
+
 # =========================
 # App FastAPI
 # =========================
@@ -29,6 +31,15 @@ app.add_middleware(
 # =========================
 # Endpoints
 # =========================
+
+
+model = None
+
+@app.on_event("startup")
+async def load_model():
+    global model
+    from model_utils import load_model  # função que inicializa o modelo pesado
+    model = load_model()  # Carrega só no startup event
 
 # --- Health check ---
 @app.get("/")
@@ -72,5 +83,6 @@ async def salvar_feedback(
 
     except Exception as e:
         return JSONResponse({"erro": str(e)}, status_code=500)
+
 
 
