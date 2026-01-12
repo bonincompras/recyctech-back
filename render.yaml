@@ -1,8 +1,7 @@
 services:
-  - type: web
-    name: recyctech-back
+  - type: worker
+    name: recyctech-worker
     env: python
     plan: free
-    pythonVersion: 3.12.16
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    startCommand: python main.py
