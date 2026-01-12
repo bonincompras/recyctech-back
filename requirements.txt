@@ -1,9 +1,6 @@
 fastapi
-uvicorn[standard]
+uvicorn
 numpy
-opencv-python-headless
-ultralytics
-requests
-python-multipart==0.0.6
-supabase
-python-multipart
+opencv-python
+tensorflow
+python-dotenv
