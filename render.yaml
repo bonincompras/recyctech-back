@@ -1,7 +1,7 @@
 services:
-  - type: worker
-    name: recyctech-worker
+  - type: web        # mudou de worker para web
+    name: recyctech-back
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
