@@ -15,7 +15,7 @@ app = FastAPI(title="EcoVision API")
 # =========================
 origins = [
     "http://127.0.0.1:5500",
-    https://bonincompras.github.io/recyctech-front/,
+    "https://bonincompras.github.io/recyctech-front/",
 ]
 
 app.add_middleware(
@@ -72,4 +72,5 @@ async def salvar_feedback(
 
     except Exception as e:
         return JSONResponse({"erro": str(e)}, status_code=500)
+
 
