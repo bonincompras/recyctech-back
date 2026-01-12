@@ -3,6 +3,11 @@ import numpy as np
 import tensorflow as tf
 from ultralytics import YOLO
 
+import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+
 # Carrega o modelo YOLOv8
 model_yolo = YOLO("yolov8n.pt")
 
